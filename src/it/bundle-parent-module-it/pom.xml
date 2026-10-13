@@ -84,7 +84,7 @@
         <configuration>
           <publishingServerId>mockcentral-irrelevant</publishingServerId>
           <waitUntil>uploaded</waitUntil>
-          <skipPublishing>true</skipPublishing>
+          <skipUpload>true</skipUpload>
         </configuration>
       </plugin>
     </plugins>
