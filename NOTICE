@@ -1,0 +1,20 @@
+Central Publishing Maven Plugin
+Copyright (c) 2022-present Sonatype, Inc.
+
+This product includes software developed at Sonatype, Inc. (https://www.sonatype.com/).
+
+This product is licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+--------------------------------------------------------------------------------
+Third-party attribution
+--------------------------------------------------------------------------------
+
+The following file is derived in part from code in the Nexus Maven Plugins project
+(https://github.com/sonatype/nexus-maven-plugins), Copyright (c) 2007-2015 Sonatype, Inc.,
+which is made available under the Eclipse Public License Version 1.0
+(http://www.eclipse.org/legal/epl-v10.html):
+
+  src/main/java/org/sonatype/central/publisher/plugin/defer/ArtifactDeferrerImpl.java
+
+Specifically, it is based on the DeferredDeployStrategy and AbstractDeployStrategy classes in
+staging/maven-plugin/src/main/java/org/sonatype/nexus/maven/staging/deploy/strategy/.

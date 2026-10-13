@@ -1,0 +1,83 @@
+#
+# Copyright (c) 2022-present Sonatype, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Authoritative Sonatype Lifecycle evaluation, on trusted refs only.
+#
+# Part of the Community "Pull Request CI & Secrets" standard. Unlike the pull request evaluation
+# (lifecycle-evaluate.yaml, which is advisory), this evaluates reviewed, merged code, and is the
+# one that enforces policy:
+#   - a push to main     -> `build` stage
+#   - a release tag      -> `release` stage
+#
+# It has secrets and runs the project's build, so it is only safe because the refs that trigger it
+# are protected. This REQUIRES:
+#   - a branch ruleset on `main` (reviewed pull requests only), and
+#   - a TAG ruleset restricting creation of `release-*` tags to maintainers. Without it, anyone
+#     with write access can create a tag and run this workflow with the secrets.
+# Release workflows must never be triggered by a pull request event.
+name: Sonatype Lifecycle Release Evaluation
+
+on:
+  push:
+    branches: [main]
+    tags: ['release-*'] # this project's release tags look like release-0.11.0
+
+permissions: {}
+
+jobs:
+  evaluate:
+    name: Evaluate (build on main, release on a tag)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+
+      # Java is scanned from build output, not from the source tree (see the Java ecosystem guide).
+      - name: Build
+        run: ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+
+      - name: Gather scan input
+        run: |
+          set -euo pipefail
+          mkdir scan-input
+          cp target/central-publishing-maven-plugin-*.jar scan-input/
+          rm -f scan-input/*-sources.jar
+          ./mvnw --batch-mode --no-transfer-progress \
+            org.apache.maven.plugins:maven-dependency-plugin:3.11.0:copy-dependencies \
+            -DoutputDirectory=scan-input/dependencies -DincludeScope=runtime
+
+      - name: Sonatype Lifecycle Evaluation
+        uses: sonatype/actions/evaluate@b1c823a70e98d3c67478cd72c0128712623455b9 # v1.14.1
+        with:
+          iq-server-url: ${{ vars.SONATYPE_PLATFORM_URL }}
+          username: ${{ secrets.SONATYPE_LIFECYCLE_USERNAME }}
+          password: ${{ secrets.SONATYPE_LIFECYCLE_PASSWORD }}
+          application-id: ${{ github.event.repository.name }}
+          scan-targets: scan-input
+          # Tags are releases; a push to main is CI. See "Which Lifecycle stage to use".
+          stage: ${{ startsWith(github.ref, 'refs/tags/') && 'release' || 'build' }}

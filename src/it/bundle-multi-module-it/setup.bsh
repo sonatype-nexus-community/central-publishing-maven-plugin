@@ -1,0 +1,37 @@
+/*
+ * Copyright (c) 2022-present Sonatype, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+import java.io.*;
+import java.util.*;
+
+import org.apache.maven.shared.utils.io.FileUtils;
+
+File stagingDirectory = new File( "target/it/bundle-multi-module-it/target/central-staging" );
+
+// set up an example file left behind from a previous build
+FileUtils.forceMkdir(stagingDirectory);
+File oldJar = new File(stagingDirectory.getAbsolutePath() + "/org/sonatype/central/child1/0.1/child1-0.1.jar");
+FileUtils.forceMkdir(oldJar.getParentFile());
+oldJar.createNewFile();
+
+File publishingDirectory = new File("target/it/bundle-multi-module-it/target/central-publishing");
+
+// set up an example file left behind from a previous build
+FileUtils.forceMkdir(publishingDirectory);
+File oldBundle = new File(publishingDirectory.getAbsolutePath() + "/central-bundle.zip");
+FileUtils.forceMkdir(oldBundle.getParentFile());
+oldBundle.createNewFile();
+
+return true;

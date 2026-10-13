@@ -1,0 +1,197 @@
+#
+# Copyright (c) 2022-present Sonatype, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Releases the plugin to Maven Central using the maven-release-plugin.
+#
+# Part of the Community "Pull Request CI & Secrets" standard: this is a RELEASE workflow, so it
+# runs only from a trusted ref, has publishing credentials, and is never triggered by a pull
+# request event.
+#
+# What it does, in order:
+#   1. release:prepare - sets the release version, commits it, tags release-X.Y.Z (passed with -Dtag,
+#      because the tag format is not set in pom.xml), then commits the next development version.
+#      Nothing is pushed yet (pushChanges=false in pom.xml).
+#   2. release:perform - checks out the new tag and runs `deploy` with the `publish` and `release`
+#      profiles: javadoc and source jars, GPG signing, and publication to Maven Central.
+#   3. Pushes the commits and the tag to origin, only after both steps succeeded.
+#
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-version:
+        description: 'Version to release, for example 0.12.0. The tag will be release-<version>.'
+        required: true
+        type: string
+      next-development-version:
+        description: 'Next development version, for example 0.13.0-SNAPSHOT. Leave empty to increment automatically.'
+        required: false
+        type: string
+      dry-run:
+        description: 'Prepare only: compute and verify the release, but do not publish or push anything.'
+        required: true
+        type: boolean
+        default: true
+      skip-pre-checks:
+        description: 'Skip Pre-flight Checks - TO BE REMOVED LATER'
+        required: true
+        type: boolean
+        default: false
+
+# No permissions by default. The release job asks for what it needs.
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    # Only ever from main. A manual run on any other branch or tag is refused.
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # push the release commits and the tag
+    env:
+      RELEASE_VERSION: ${{ inputs.release-version }}
+      NEXT_VERSION: ${{ inputs.next-development-version }}
+      DRY_RUN: ${{ inputs.dry-run }}
+    steps:
+      # Validate every input before it is used anywhere. These values end up on a Maven command line.
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          version_re='^[0-9]+\.[0-9]+\.[0-9]+$'
+          snapshot_re='^[0-9]+\.[0-9]+\.[0-9]+-SNAPSHOT$'
+          if ! [[ "${RELEASE_VERSION}" =~ $version_re ]]; then
+            echo "::error::release-version is required and must look like 1.2.3"
+            exit 1
+          fi
+          if [ -n "${NEXT_VERSION}" ] && ! [[ "${NEXT_VERSION}" =~ $snapshot_re ]]; then
+            echo "::error::next-development-version must look like 1.2.3-SNAPSHOT"
+            exit 1
+          fi
+
+      # Full history and tags are needed by the release plugin. Credentials are kept because this job
+      # pushes, but only the final step uses them.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      # setup-java writes a settings.xml with server id `central` and imports the GPG key.
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_SIGNING_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # Refuse to release anything that is not exactly what is on main, or that has not passed CI.
+      - name: Verify main is up to date and green
+        if: ${{ inputs.skip-pre-checks != true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          if [ "$sha" != "${GITHUB_SHA}" ]; then
+            echo "::error::main moved since this run was started ($sha != ${GITHUB_SHA}). Re-run the release."
+            exit 1
+          fi
+          # The CI workflow must have succeeded on this exact commit.
+          conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yaml/runs?head_sha=${sha}&status=completed" \
+            --jq '[.workflow_runs[] | select(.event == "push")] | sort_by(.created_at) | last | .conclusion // "none"')
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::CI has not succeeded on ${sha} (result: ${conclusion}). Fix CI before releasing."
+            exit 1
+          fi
+
+      # This plugin publishes itself, so the release is published BY THE PREVIOUS RELEASE: the version
+      # being released does not exist on Central yet. Use the newest published version. It is passed
+      # on the command line (not set in pom.xml), see the note in the pom.xml properties.
+      - name: Find the last released version to publish with
+        id: bootstrap
+        run: |
+          set -euo pipefail
+          version=$(curl -fsSL \
+            "https://repo1.maven.org/maven2/org/sonatype/central/central-publishing-maven-plugin/maven-metadata.xml" \
+            | sed -n 's:.*<release>\(.*\)</release>.*:\1:p')
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Could not determine the last released version from Maven Central (got '${version}')"
+            exit 1
+          fi
+          echo "Publishing with central-publishing-maven-plugin ${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release
+        env:
+          BOOTSTRAP_VERSION: ${{ steps.bootstrap.outputs.version }}
+        run: |
+          set -euo pipefail
+          args=(--batch-mode --no-transfer-progress release:prepare)
+          args+=("-Dcentral-publishing-bootstrap.version=${BOOTSTRAP_VERSION}")
+          args+=("-DreleaseVersion=${RELEASE_VERSION}")
+          # The tag must be release-X.Y.Z: lifecycle-release.yaml only runs for release-* tags.
+          args+=("-Dtag=release-${RELEASE_VERSION}")
+          [ -n "${NEXT_VERSION}" ] && args+=("-DdevelopmentVersion=${NEXT_VERSION}")
+          [ "${DRY_RUN}" = "true" ] && args+=("-DdryRun=true")
+          ./mvnw "${args[@]}"
+
+      - name: Perform release (sign and publish to Maven Central)
+        if: ${{ inputs.dry-run != true }}
+        env:
+          BOOTSTRAP_VERSION: ${{ steps.bootstrap.outputs.version }}
+          MAVEN_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        # -Darguments is passed to the build that release:perform forks.
+        # maven.deploy.skip: the `publish` profile binds central-publishing:publish to the deploy phase, so the
+        # standard maven-deploy-plugin must be skipped. Otherwise it runs too and fails (no distributionManagement).
+        run: >-
+          ./mvnw --batch-mode --no-transfer-progress release:perform
+          "-Darguments=-Dcentral-publishing-bootstrap.version=${BOOTSTRAP_VERSION} -Dmaven.deploy.skip=true"
+
+      # Pushed last, and only if everything above succeeded, so a failed release leaves nothing on origin.
+      - name: Push release commits and tag
+        if: ${{ inputs.dry-run != true }}
+        run: |
+          set -euo pipefail
+          git push --atomic origin HEAD:main --follow-tags
+
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "### Release"
+            echo "- Dry run: ${DRY_RUN}"
+            echo "- Commit: ${GITHUB_SHA}"
+          } >> "$GITHUB_STEP_SUMMARY"

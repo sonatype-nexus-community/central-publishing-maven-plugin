@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Copyright (c) 2022-present Sonatype, Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<settings>
+  <servers>
+    <server>
+      <id>mockcentral</id>
+      <username>test_user</username>
+      <password>test_password</password>
+    </server>
+    <server>
+      <id>mockcentral_usertoken</id>
+      <username>test_namecode</username>
+      <password>test_passcode</password>
+    </server>
+    <server>
+      <id>mockcentral_wait_for_publish</id>
+      <username>test_user_wait_for_publish</username>
+      <password>test_password_wait_for_publish</password>
+    </server>
+    <server>
+      <id>mockcentral_without_checksums</id>
+      <username>test_user_without_checksums</username>
+      <password>test_password_without_checksums</password>
+    </server>
+    <server>
+      <id>mockcentral_with_required_checksums</id>
+      <username>test_user_with_required_checksums</username>
+      <password>test_password_with_required_checksums</password>
+    </server>
+    <!-- for the publish-*-it tests, that don't require an active server -->
+    <server>
+      <id>mockcentral-irrelevant</id>
+      <username>test_user_irrelevant</username>
+      <password>test_password_irrelevant</password>
+    </server>
+  </servers>
+  <profiles>
+    <profile>
+      <id>it-repo</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <repositories>
+        <repository>
+          <id>local.central</id>
+          <url>@localRepositoryUrl@</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>local.central</id>
+          <url>@localRepositoryUrl@</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+</settings>

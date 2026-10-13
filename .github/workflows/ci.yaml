@@ -1,0 +1,154 @@
+#
+# Copyright (c) 2022-present Sonatype, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Tier 1 of the Community "Pull Request CI & Secrets" standard.
+#
+# Runs on every pull request, including those from forks, with NO secrets. It runs the
+# contributor's code, so it must never be given a secret or a write permission.
+#
+# The workflow name ("CI") is referenced by lifecycle-evaluate.yaml. Keep the two in step.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# No permissions by default. Each job asks only for what it needs.
+permissions: {}
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The plugin is compiled at Java source level 8 (see pom.xml), and must stay buildable
+      # with a Java 8 toolchain, so Java 8 is what we build and test with.
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+
+      # Unit tests. None of them need a protected resource.
+      - name: Build and unit test
+        run: ./mvnw --batch-mode --no-transfer-progress verify
+
+  # Integration tests that use the invoker plugin and a mock Central Portal in a container.
+  # The mock needs no licence or credentials, so these are unprotected and belong in Tier 1.
+  #
+  # This job is advisory: it is not part of the `ci` gate below. To make it a required check,
+  # add `integration-test` to the `needs` list of the `ci` job and remove `continue-on-error`.
+  integration-test:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+
+      # Docker is available on the runner; the run-its profile starts the mock Central container.
+      - name: Run integration tests
+        run: ./mvnw --batch-mode --no-transfer-progress -DskipTests verify -P run-its
+
+  # Produces the input for the Sonatype Lifecycle evaluation in lifecycle-evaluate.yaml.
+  # For a Java project this is the built artifact plus its dependencies; see the Java ecosystem
+  # guide in the standard. This job runs contributor code (the build), so it has no secrets.
+  prepare-scan-input:
+    name: Prepare Lifecycle scan input
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+
+      - name: Build
+        run: ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+
+      - name: Gather scan input
+        run: |
+          set -euo pipefail
+          mkdir scan-input
+          # The plugin jar, but not the -sources jar.
+          cp target/central-publishing-maven-plugin-*.jar scan-input/
+          rm -f scan-input/*-sources.jar
+          # The jar is thin: it does not contain its dependencies, so copy them alongside.
+          # Runtime scope only, so that test-only dependencies are not evaluated.
+          ./mvnw --batch-mode --no-transfer-progress \
+            org.apache.maven.plugins:maven-dependency-plugin:3.11.0:copy-dependencies \
+            -DoutputDirectory=scan-input/dependencies -DincludeScope=runtime
+
+      - name: Upload scan input
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lifecycle-scan-input
+          path: scan-input/
+          if-no-files-found: error
+          retention-days: 3
+
+  # The single check to require in the branch ruleset (the standard's "one Tier 1 check").
+  # It fails if any job it depends on did not succeed, so jobs can be added or renamed
+  # without editing the ruleset.
+  ci:
+    name: CI
+    if: ${{ always() }}
+    needs: [build-and-test, prepare-scan-input]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check results
+        env:
+          NEEDS_RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $NEEDS_RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A required job finished with '$result'"
+              exit 1
+            fi
+          done

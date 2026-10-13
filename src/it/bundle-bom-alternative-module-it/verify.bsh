@@ -1,0 +1,108 @@
+/*
+ * Copyright (c) 2022-present Sonatype, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+import java.io.*;
+import java.util.*;
+
+System.out.println("Validating staging directory existence");
+File stagingDirectory = new File( "target/it/bundle-bom-alternative-module-it/target/central-staging" );
+if (!stagingDirectory.exists()) {
+  throw new FileNotFoundException("Staging directory not created: " + stagingDirectory.getAbsolutePath());
+}
+System.out.println("Staging directory in place, validating content");
+
+String[] stagingFilePaths = {
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0.pom",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0.pom.md5",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0.pom.sha1",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0.pom.sha256",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0.pom.sha512",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0.jar",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0.jar.md5",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0.jar.sha1",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0.jar.sha256",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0.jar.sha512",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0-javadoc.jar",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0-javadoc.jar.md5",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0-javadoc.jar.sha1",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0-javadoc.jar.sha256",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0-javadoc.jar.sha512",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0-sources.jar",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0-sources.jar.md5",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0-sources.jar.sha1",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0-sources.jar.sha256",
+    "org/sonatype/central/child1/1.0.0/child1-1.0.0-sources.jar.sha512",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0.pom",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0.pom.md5",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0.pom.sha1",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0.pom.sha256",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0.pom.sha512",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0.jar",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0.jar.md5",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0.jar.sha1",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0.jar.sha256",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0.jar.sha512",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0-javadoc.jar",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0-javadoc.jar.md5",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0-javadoc.jar.sha1",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0-javadoc.jar.sha256",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0-javadoc.jar.sha512",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0-sources.jar",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0-sources.jar.md5",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0-sources.jar.sha1",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0-sources.jar.sha256",
+    "org/sonatype/central/child2/1.0.0/child2-1.0.0-sources.jar.sha512",
+};
+
+for (String stagingFilePath : stagingFilePaths) {
+  File file = new File(stagingDirectory, stagingFilePath);
+  System.out.println( "Checking for existence of " + file );
+  if (!file.isFile()) {
+    throw new FileNotFoundException( "Missing staging file: " + file.getAbsolutePath() );
+  }
+}
+
+String[] excludedStagingFilePaths = {
+  "org/sonatype/central/bundle-bom-alternative-module-it/maven-metadata-central-staging.xml",
+  "org/sonatype/central/bundle-bom-alternative-module-it/1.0.0/maven-metadata-central-staging.xml",
+  "org/sonatype/central/bundle-bom-parent-alternative-module-it/maven-metadata-central-staging.xml",
+  "org/sonatype/central/bundle-bom-parent-alternative-module-it/1.0.0/maven-metadata-central-staging.xml",
+  "org/sonatype/central/child1/maven-metadata-central-staging.xml",
+  "org/sonatype/central/child2/maven-metadata-central-staging.xml",
+  "org/sonatype/central/child1/1.0.0/maven-metadata-central-staging.xml",
+  "org/sonatype/central/child2/1.0.0/maven-metadata-central-staging.xml",
+};
+
+for (String stagingFilePath : excludedStagingFilePaths) {
+  File file = new File(stagingDirectory, stagingFilePath);
+  System.out.println( "Checking for existence of " + file );
+  if (file.isFile()) {
+    throw new Exception( "Did not excluded staging file: " + file.getAbsolutePath() );
+  }
+}
+
+File bundleDirectory = new File( "target/it/bundle-bom-alternative-module-it/target/central-publishing" );
+if (!bundleDirectory.exists()) {
+  throw new FileNotFoundException("Bundle directory not created: " + bundleDirectory.getAbsolutePath());
+}
+System.out.println("Bundle directory in place, validating content");
+
+File file = new File(bundleDirectory, "central-bundle.zip");
+System.out.println( "Checking for existence of " + file );
+if (!file.isFile()) {
+  throw new FileNotFoundException( "Missing bundle file: " + file.getAbsolutePath() );
+}
+
+return true;
