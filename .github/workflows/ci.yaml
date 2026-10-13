@@ -80,14 +80,11 @@ jobs:
 
   # Integration tests that use the invoker plugin and a mock Central Portal in a container.
   # The mock needs no licence or credentials, so these are unprotected and belong in Tier 1.
-  #
-  # This job is advisory: it is not part of the `ci` gate below. To make it a required check,
-  # add `integration-test` to the `needs` list of the `ci` job and remove `continue-on-error`.
+  # They run on every supported Maven version and are part of the `ci` gate below.
   integration-test:
     name: Integration tests (Maven ${{ matrix.maven }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: true
     permissions:
       contents: read
     strategy:
@@ -196,7 +193,7 @@ jobs:
   ci:
     name: CI
     if: ${{ always() }}
-    needs: [build-and-test, prepare-scan-input]
+    needs: [build-and-test, integration-test, prepare-scan-input]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
