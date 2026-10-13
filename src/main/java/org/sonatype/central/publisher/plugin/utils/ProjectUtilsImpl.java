@@ -16,11 +16,17 @@
 package org.sonatype.central.publisher.plugin.utils;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 import org.sonatype.central.publisher.plugin.model.ArtifactWithFile;
 import org.sonatype.central.publisher.plugin.model.ChecksumRequest;
@@ -44,6 +50,15 @@ public class ProjectUtilsImpl
     implements ProjectUtils
 {
   public static final String MAVEN_METADATA_CENTRAL_STAGING_XML = "maven-metadata-central-staging.xml";
+
+  // Files a Maven local repository keeps about its content. Newer Maven versions write them into the staging
+  // repository, and Central rejects a bundle holding them.
+  private static final List<String> LOCAL_REPOSITORY_FILES =
+      Arrays.asList("maven-metadata-local.xml", "_remote.repositories");
+
+  private static final List<String> CHECKSUM_SUFFIXES = Arrays.asList(".md5", ".sha1", ".sha256", ".sha512");
+
+  private static final String LOCKS_DIRECTORY = ".locks";
 
   @Requirement
   private HashUtils hashUtils;
@@ -197,6 +212,70 @@ public class ProjectUtilsImpl
   private List<ArtifactWithFile> getAttachedArtifacts(final MavenProject mavenProject) {
     return mavenProject.getAttachedArtifacts().stream()
         .map(artifact -> new ArtifactWithFile(artifact.getFile(), artifact)).collect(toList());
+  }
+
+  @Override
+  public void deleteLocalRepositoryFiles(final Path stagingDir) {
+    if (!Files.isDirectory(stagingDir)) {
+      return;
+    }
+
+    try (Stream<Path> walk = Files.walk(stagingDir)) {
+      // Everything under a .locks directory goes with it, so do not look inside one for further matches.
+      final List<Path> toDelete = walk
+          .filter(path -> isLocalRepositoryFile(path) || isUnderLocksDirectory(stagingDir, path))
+          .collect(toList());
+      // Deepest paths first, so a directory is only removed after what is in it.
+      toDelete.sort(Comparator.reverseOrder());
+      for (final Path path : toDelete) {
+        deleteLocalRepositoryPath(path);
+      }
+    }
+    catch (IOException | UncheckedIOException e) {
+      getLogger().error(String.format("Pre Bundling - failed to scan %s for local repository files", stagingDir), e);
+    }
+  }
+
+  private boolean isLocalRepositoryFile(final Path path) {
+    if (!Files.isRegularFile(path)) {
+      return false;
+    }
+    final String name = path.getFileName().toString();
+    for (final String localRepositoryFile : LOCAL_REPOSITORY_FILES) {
+      if (name.equals(localRepositoryFile)) {
+        return true;
+      }
+      for (final String checksumSuffix : CHECKSUM_SUFFIXES) {
+        if (name.equals(localRepositoryFile + checksumSuffix)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * A {@code .locks} directory anywhere in the staging directory, and everything below it. Nothing with that name can
+   * be part of a published component.
+   */
+  private boolean isUnderLocksDirectory(final Path stagingDir, final Path path) {
+    for (final Path segment : stagingDir.relativize(path)) {
+      if (LOCKS_DIRECTORY.equals(segment.toString())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private void deleteLocalRepositoryPath(final Path path) {
+    try {
+      if (Files.deleteIfExists(path)) {
+        getLogger().info(String.format("Pre Bundling - deleted %s", path));
+      }
+    }
+    catch (IOException e) {
+      getLogger().error(String.format("Pre Bundling - failed to delete %s", path), e);
+    }
   }
 
   private void deleteMavenMetadataCentralStagingXml(final MavenProject project, final Path sourceDir) {

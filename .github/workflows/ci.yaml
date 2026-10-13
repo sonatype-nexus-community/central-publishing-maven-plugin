@@ -32,11 +32,17 @@ permissions: {}
 
 jobs:
   build-and-test:
-    name: Build and test
+    name: Build and test (Maven ${{ matrix.maven }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
+    strategy:
+      # Report every supported Maven version, not just the first to fail.
+      fail-fast: false
+      matrix:
+        # The supported Maven versions. Add a version here to support it; remove one to drop support.
+        maven: ['3.9.16', '3.10.0']
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,9 +58,25 @@ jobs:
           java-version: '8'
           cache: maven
 
+      - name: Set up Maven ${{ matrix.maven }}
+        env:
+          MAVEN_VERSION: ${{ matrix.maven }}
+        run: |
+          set -euo pipefail
+          base="https://repo1.maven.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}"
+          archive="apache-maven-${MAVEN_VERSION}-bin.tar.gz"
+          curl -fsSL -o "${RUNNER_TEMP}/${archive}" "${base}/${archive}"
+          # Verify against the checksum Maven Central publishes alongside the archive.
+          echo "$(curl -fsSL "${base}/${archive}.sha512")  ${RUNNER_TEMP}/${archive}" | sha512sum --check -
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/apache-maven-${MAVEN_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Show versions
+        run: mvn --version
+
       # Unit tests. None of them need a protected resource.
       - name: Build and unit test
-        run: ./mvnw --batch-mode --no-transfer-progress verify
+        run: mvn --batch-mode --no-transfer-progress verify
 
   # Integration tests that use the invoker plugin and a mock Central Portal in a container.
   # The mock needs no licence or credentials, so these are unprotected and belong in Tier 1.
@@ -62,12 +84,17 @@ jobs:
   # This job is advisory: it is not part of the `ci` gate below. To make it a required check,
   # add `integration-test` to the `needs` list of the `ci` job and remove `continue-on-error`.
   integration-test:
-    name: Integration tests
+    name: Integration tests (Maven ${{ matrix.maven }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
     continue-on-error: true
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # The supported Maven versions. Keep in step with build-and-test.
+        maven: ['3.9.16', '3.10.0']
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -81,9 +108,27 @@ jobs:
           java-version: '8'
           cache: maven
 
+      # The integration tests run Maven themselves, with whichever Maven runs this build, so this is the Maven
+      # version they are tested against.
+      - name: Set up Maven ${{ matrix.maven }}
+        env:
+          MAVEN_VERSION: ${{ matrix.maven }}
+        run: |
+          set -euo pipefail
+          base="https://repo1.maven.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}"
+          archive="apache-maven-${MAVEN_VERSION}-bin.tar.gz"
+          curl -fsSL -o "${RUNNER_TEMP}/${archive}" "${base}/${archive}"
+          # Verify against the checksum Maven Central publishes alongside the archive.
+          echo "$(curl -fsSL "${base}/${archive}.sha512")  ${RUNNER_TEMP}/${archive}" | sha512sum --check -
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/apache-maven-${MAVEN_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Show versions
+        run: mvn --version
+
       # Docker is available on the runner; the run-its profile starts the mock Central container.
       - name: Run integration tests
-        run: ./mvnw --batch-mode --no-transfer-progress -DskipTests verify -P run-its
+        run: mvn --batch-mode --no-transfer-progress -DskipTests verify -P run-its
 
   # Produces the input for the Sonatype Lifecycle evaluation in lifecycle-evaluate.yaml.
   # For a Java project this is the built artifact plus its dependencies; see the Java ecosystem
@@ -107,8 +152,22 @@ jobs:
           java-version: '8'
           cache: maven
 
+      # A single build is enough here, as the scan input does not depend on the Maven version.
+      - name: Set up Maven
+        env:
+          MAVEN_VERSION: '3.9.16'
+        run: |
+          set -euo pipefail
+          base="https://repo1.maven.org/maven2/org/apache/maven/apache-maven/${MAVEN_VERSION}"
+          archive="apache-maven-${MAVEN_VERSION}-bin.tar.gz"
+          curl -fsSL -o "${RUNNER_TEMP}/${archive}" "${base}/${archive}"
+          # Verify against the checksum Maven Central publishes alongside the archive.
+          echo "$(curl -fsSL "${base}/${archive}.sha512")  ${RUNNER_TEMP}/${archive}" | sha512sum --check -
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/apache-maven-${MAVEN_VERSION}/bin" >> "$GITHUB_PATH"
+
       - name: Build
-        run: ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+        run: mvn --batch-mode --no-transfer-progress -DskipTests package
 
       - name: Gather scan input
         run: |
@@ -119,7 +178,7 @@ jobs:
           rm -f scan-input/*-sources.jar
           # The jar is thin: it does not contain its dependencies, so copy them alongside.
           # Runtime scope only, so that test-only dependencies are not evaluated.
-          ./mvnw --batch-mode --no-transfer-progress \
+          mvn --batch-mode --no-transfer-progress \
             org.apache.maven.plugins:maven-dependency-plugin:3.11.0:copy-dependencies \
             -DoutputDirectory=scan-input/dependencies -DincludeScope=runtime
 

@@ -60,7 +60,12 @@ public class MockserverConfiguration
   private static final String PUBLISH_SINGLE_MODULE_WITH_REQUIRED_CHECKSUMS_IT_AUTH =
       HTTP_USERTOKEN_AUTH_SCHEME + " dGVzdF91c2VyX3dpdGhfcmVxdWlyZWRfY2hlY2tzdW1zOnRlc3RfcGFzc3dvcmRfd2l0aF9yZXF1aXJlZF9jaGVja3N1bXM=";
 
+  private static final String PUBLISH_POM_MODULE_IT_AUTH =
+      HTTP_USERTOKEN_AUTH_SCHEME + " dGVzdF91c2VyX3BvbV9tb2R1bGU6dGVzdF9wYXNzd29yZF9wb21fbW9kdWxl";
+
   private static final String PUBLISH_SINGLE_MODULE_IT_DEPLOYMENT_ID = "a_deployment_id";
+
+  private static final String PUBLISH_POM_MODULE_IT_DEPLOYMENT_ID = "a_deployment_id_pom_module";
 
   private static final String PUBLISH_USER_TOKEN_IT_DEPLOYMENT_ID = "a_deployment_id_user_token_auth";
 
@@ -103,6 +108,10 @@ public class MockserverConfiguration
       mockServerClient.when(request().withMethod(HTTP_POST_METHOD).withPath(UPLOAD_ENDPOINT_URL)
               .withHeader(HTTP_AUTHORIZATION_HEADER, PUBLISH_SINGLE_MODULE_IT_AUTH), once())
           .respond(response().withStatusCode(HTTP_STATUS_CREATED).withBody(PUBLISH_SINGLE_MODULE_IT_DEPLOYMENT_ID));
+      // for publish-pom-module-no-local-repository-files-it
+      mockServerClient.when(request().withMethod(HTTP_POST_METHOD).withPath(UPLOAD_ENDPOINT_URL)
+              .withHeader(HTTP_AUTHORIZATION_HEADER, PUBLISH_POM_MODULE_IT_AUTH), once())
+          .respond(response().withStatusCode(HTTP_STATUS_CREATED).withBody(PUBLISH_POM_MODULE_IT_DEPLOYMENT_ID));
       // for publish-single-module-with-usertoken-it
       mockServerClient.when(request().withMethod(HTTP_POST_METHOD).withPath(UPLOAD_ENDPOINT_URL)
               .withHeader(HTTP_AUTHORIZATION_HEADER, PUBLISH_USER_TOKEN_IT_AUTH), once())
