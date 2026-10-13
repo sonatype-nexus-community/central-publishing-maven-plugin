@@ -93,6 +93,10 @@ public class Constants
 
   public static final String IGNORE_PUBLISHED_COMPONENTS_DEFAULT_VALUE = "false";
 
+  public static final String SKIP_UPLOAD_NAME = "skipUpload";
+
+  public static final String SKIP_UPLOAD_DEFAULT_VALUE = "false";
+
   public static final String EXCLUDE_ARTIFACTS_NAME = "excludeArtifacts";
 
   public static final String WAIT_FOR_PUBLISH_COMPLETION_NAME = "waitForPublishCompletion";
