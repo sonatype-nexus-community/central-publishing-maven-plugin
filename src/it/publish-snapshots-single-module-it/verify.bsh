@@ -17,6 +17,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.nio.file.Files;
 
+source("src/it/shared/metadata.bsh");
+
 File projectDirectory = new File("target/it/publish-snapshots-single-module-it");
 File targetDirectory = new File(projectDirectory, "target");
 System.out.println("Validating deferred directory existence");
@@ -32,25 +34,13 @@ String[] stagedFilePaths = {
     "org/sonatype/central/publish-snapshots-single-module-it/1.0.0-SNAPSHOT/publish-snapshots-single-module-it-1.0.0-SNAPSHOT.jar"
 };
 
-for (String stagedFilePath : stagedFilePaths) {
-  File stagedFile = new File(deferredDirectory, stagedFilePath);
-  System.out.println( "Checking for existence of " + stagedFile );
-  if (!stagedFile.isFile()) {
-    throw new FileNotFoundException( "Missing staged file: " + stagedFile.getAbsolutePath() );
-  }
-}
+checkPresent(deferredDirectory, stagedFilePaths);
 
 String[] excludedStagingFilePaths = {
 
 };
 
-for (String deferredFilePath : excludedStagingFilePaths) {
-  File file = new File(deferredDirectory, deferredFilePath);
-  System.out.println( "Checking for existence of " + file );
-  if (file.isFile()) {
-    throw new Exception( "Did not excluded deferred file: " + file.getAbsolutePath() );
-  }
-}
+checkAbsent(deferredDirectory, excludedStagingFilePaths);
 
 File buildLog = new File(projectDirectory, "build.log");
 String logOutput = new String(Files.readAllBytes(buildLog.toPath()));

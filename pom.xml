@@ -310,6 +310,14 @@
               <centralBaseUrl>http://localhost:${mockcentral.port}</centralBaseUrl>
               <centralSnapshotsUrl>http://localhost:${mockcentral.port}/snapshots/</centralSnapshotsUrl>
             </properties>
+            <!--
+              Some ITs check Maven's own "Uploading to ..." transfer log lines. CI environments such as GitHub Actions
+              set MAVEN_ARGS=-ntp (no transfer progress), which the builds started by the invoker would inherit and
+              which removes those lines. Clear it, so that the ITs do not depend on where they run.
+            -->
+            <environmentVariables>
+              <MAVEN_ARGS></MAVEN_ARGS>
+            </environmentVariables>
             <goals>
               <goal>deploy</goal>
             </goals>

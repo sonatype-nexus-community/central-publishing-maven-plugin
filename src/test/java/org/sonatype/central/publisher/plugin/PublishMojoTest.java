@@ -258,6 +258,90 @@ public class PublishMojoTest extends AbstractPlexusInjectionTest {
     assertEquals("artifact3", thirdInvocationArtifacts.get(0).getArtifact().getArtifactId());
   }
 
+  @Test
+  public void testPostProcessRelease_SkipUpload_BuildsTheBundleButDoesNotUploadIt() throws Exception {
+    File tempDir = createTempStagingDir();
+    when(artifactBundler.bundle(any())).thenReturn(new File(tempDir, "central-bundle.zip").toPath());
+    injectValue(realMojo, "skipUpload", true);
+
+    realMojo.postProcessRelease(tempDir, mockOutputDirectory, "testDeployment");
+
+    verify(artifactBundler, times(1)).bundle(any());
+    verify(artifactUploader, never()).upload(any());
+    verify(deploymentPublishedWatcher, never()).waitForDeploymentState(any());
+  }
+
+  @Test
+  public void testPostProcessRelease_DoNotSkipUpload_StillUploads() throws Exception {
+    File tempDir = createTempStagingDir();
+    injectValue(realMojo, "skipUpload", false);
+
+    realMojo.postProcessRelease(tempDir, mockOutputDirectory, "testDeployment");
+
+    verify(artifactBundler, times(1)).bundle(any());
+    verify(artifactUploader, times(1)).upload(any());
+  }
+
+  @Test
+  public void testPostProcessRelease_SkipUpload_NoFilesInStagingDirectory_DoesNothing() throws Exception {
+    injectValue(realMojo, "skipUpload", true);
+
+    realMojo.postProcessRelease(mockStagingDirectory, mockOutputDirectory, "testDeployment");
+
+    verify(artifactBundler, never()).bundle(any());
+    verify(artifactUploader, never()).upload(any());
+  }
+
+  @Test
+  public void testPostProcessSnapshot_SkipUpload_DoesNotDeployTheDeferredArtifacts() throws Exception {
+    File deferredDir = createTempStagingDir();
+    Files.createFile(new File(deferredDir, ".index").toPath());
+    injectValue(realMojo, "skipUpload", true);
+
+    realMojo.postProcessSnapshot(deferredDir);
+
+    verify(artifactDeferrer, never()).deployUp(any(), any(), any());
+  }
+
+  @Test
+  public void testPostProcessSnapshot_DoNotSkipUpload_StillDeploys() throws Exception {
+    File deferredDir = createTempStagingDir();
+    Files.createFile(new File(deferredDir, ".index").toPath());
+    injectValue(realMojo, "skipUpload", false);
+
+    realMojo.postProcessSnapshot(deferredDir);
+
+    verify(artifactDeferrer, times(1)).deployUp(any(), any(), any());
+  }
+
+  /**
+   * skipUpload is about the upload, not about which artifacts are staged. Unlike skipPublishing, it must leave the
+   * artifacts in the staging directory so that a bundle can be built from them.
+   */
+  @Test
+  public void testProcessRelease_SkipUpload_StillStagesTheArtifacts() throws Exception {
+    File tempDir = Files.createTempDirectory("testStagingDir").toFile();
+    injectValue(realMojo, "skipUpload", true);
+
+    realMojo.processRelease(getMockArtifacts("group1", "artifact1", "1.0.0"), tempDir);
+
+    ArgumentCaptor<StageArtifactRequest> captor = ArgumentCaptor.forClass(StageArtifactRequest.class);
+    verify(artifactStager, times(1)).stageArtifact(captor.capture());
+    assertEquals(1, captor.getValue().getArtifactWithFiles().size());
+  }
+
+  @Test
+  public void testProcessSnapshot_SkipUpload_StillStagesTheArtifacts() throws Exception {
+    File tempDir = Files.createTempDirectory("testDeferredDir").toFile();
+    injectValue(realMojo, "skipUpload", true);
+
+    realMojo.processSnapshot(getMockArtifacts("group1", "artifact1", "1.0.0"), tempDir);
+
+    ArgumentCaptor<DeferArtifactRequest> captor = ArgumentCaptor.forClass(DeferArtifactRequest.class);
+    verify(artifactDeferrer, times(1)).install(captor.capture());
+    assertEquals(1, captor.getValue().getArtifactWithFiles().size());
+  }
+
   private File createTempStagingDir() throws IOException {
     // Instead of mocking the staging directory, lets make a temporary directory. The mock is empty.
     File tempDir = Files.createTempDirectory("testStagingDir").toFile();

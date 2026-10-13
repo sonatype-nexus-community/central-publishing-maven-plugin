@@ -125,7 +125,7 @@
         <configuration>
           <publishingServerId>mockcentral-irrelevant</publishingServerId>
           <waitUntil>uploaded</waitUntil>
-          <skipPublishing>true</skipPublishing>
+          <skipUpload>true</skipUpload>
           <excludeArtifacts>
             <artifactId>child1</artifactId>
           </excludeArtifacts>

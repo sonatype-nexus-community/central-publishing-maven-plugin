@@ -178,6 +178,19 @@ public class PublishMojo
   private boolean ignorePublishedComponents;
 
   /**
+   * Create the bundle, but skip uploading it and publishing it. This is useful for creating a bundle and manually
+   * uploading it through central.sonatype.com. The bundle is written to the output directory. For snapshots, the
+   * artifacts are staged, but not deployed.
+   * <p>
+   * Artifacts are still staged and bundled. To leave a module's artifacts out of the publication altogether, use
+   * {@code skipPublishing}. Nothing is sent to Central when this is set, so no credentials for
+   * {@code publishingServerId} are needed, unless {@code ignorePublishedComponents} is also set, as that asks Central
+   * which components are already published. Defaults to {@link Constants#SKIP_UPLOAD_DEFAULT_VALUE}.
+   */
+  @Parameter(property = SKIP_UPLOAD_NAME, defaultValue = SKIP_UPLOAD_DEFAULT_VALUE)
+  private boolean skipUpload;
+
+  /**
    * Assign artifacts that must not be added to the bundle that represents the deployment that will be published.
    */
   @Parameter(property = EXCLUDE_ARTIFACTS_NAME)
@@ -317,7 +330,11 @@ public class PublishMojo
       processSnapshot(artifactWithFiles, deferredDirectory);
     }
     else {
-      configurePublisherClient();
+      // Credentials are needed to upload, and to ask Central which components are already published. When the
+      // upload is skipped and that check is not requested, nothing is sent to Central.
+      if (!skipUpload || ignorePublishedComponents) {
+        configurePublisherClient();
+      }
       processRelease(artifactWithFiles, stagingDirectory);
     }
 
@@ -353,7 +370,7 @@ public class PublishMojo
     }
   }
 
-  private void postProcessSnapshot(final File deferredDirectory)
+  protected void postProcessSnapshot(final File deferredDirectory)
       throws MojoExecutionException
   {
     try {
@@ -363,6 +380,14 @@ public class PublishMojo
       }
 
       if (Files.exists(new File(deferredDirectory, INDEX_FILE_NAME).toPath())) {
+        if (skipUpload) {
+          getLog().info(format(
+              "Skipping the deployment of the staged SNAPSHOT artifacts at user's request (%s). They are in %s",
+              SKIP_UPLOAD_NAME,
+              deferredDirectory
+          ));
+          return;
+        }
 
         // note that we pass a null for the remote repository, to get repository from the index from an install.
         artifactDeferrer.deployUp(getMavenSession(), deferredDirectory, null);
@@ -461,6 +486,15 @@ public class PublishMojo
             outputFilename,
             checksumRequest
         ));
+
+    if (skipUpload) {
+      getLog().info(format(
+          "Skipping the upload of the bundle at user's request (%s). The bundle is at %s",
+          SKIP_UPLOAD_NAME,
+          bundleFile
+      ));
+      return;
+    }
 
     UploadArtifactRequest uploadRequest = new UploadArtifactRequest(deploymentName, bundleFile, publishingType);
     String deploymentId = artifactUploader.upload(uploadRequest);

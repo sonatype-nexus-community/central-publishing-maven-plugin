@@ -92,7 +92,7 @@
           <publishingServerId>mockcentral-irrelevant</publishingServerId>
           <checksums>all</checksums>
           <waitUntil>uploaded</waitUntil>
-          <skipPublishing>true</skipPublishing>
+          <skipUpload>true</skipUpload>
         </configuration>
       </plugin>
     </plugins>

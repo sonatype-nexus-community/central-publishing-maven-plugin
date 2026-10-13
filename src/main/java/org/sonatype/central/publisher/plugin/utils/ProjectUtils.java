@@ -41,6 +41,19 @@ public interface ProjectUtils
   void deleteGroupArtifactMavenMetadataCentralStagingXml(final MavenProject project, final Path sourceDir);
 
   /**
+   * Delete the files that a Maven local repository keeps about its content from the whole {@code stagingDir}, for all
+   * modules. Newer Maven versions treat the {@code file://} staging repository as a local repository and write
+   * {@code maven-metadata-local.xml}, {@code _remote.repositories} and a {@code .locks} directory into it. Central
+   * rejects a bundle that holds them ("Bundle has content that does NOT have a .pom file").
+   * <p>
+   * A staging directory written by an older Maven holds none of these, and is left unchanged. A directory that does
+   * not exist is ignored.
+   *
+   * @param stagingDir - {@link Path}
+   */
+  void deleteLocalRepositoryFiles(final Path stagingDir);
+
+  /**
    * Create checksum files for the direct files in the {@code sourceDir}. For example, if a {@code sourceDir} contains
    * the file TEST-1.0.pom, checksum files will be created for all the requested checksums in the given
    * {@code checksumRequest}, like TEST-1.0.pom.md5

@@ -39,6 +39,11 @@
       <password>test_password_without_checksums</password>
     </server>
     <server>
+      <id>mockcentral_pom_module</id>
+      <username>test_user_pom_module</username>
+      <password>test_password_pom_module</password>
+    </server>
+    <server>
       <id>mockcentral_with_required_checksums</id>
       <username>test_user_with_required_checksums</username>
       <password>test_password_with_required_checksums</password>

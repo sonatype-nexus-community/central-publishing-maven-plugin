@@ -1,0 +1,103 @@
+/*
+ * Copyright (c) 2022-present Sonatype, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.util.*;
+
+// Central rejects a bundle holding content that does not belong to a published component, for example
+//   "Bundle has content that does NOT have a .pom file: <group>/<artifactId>"
+// Newer Maven versions treat the file:// staging repository as a local repository and write bookkeeping files into
+// it (maven-metadata-local.xml, _remote.repositories, .locks). None of that may reach the bundle.
+
+File projectDirectory = new File("target/it/publish-pom-module-no-local-repository-files-it");
+File stagingDirectory = new File(projectDirectory, "target/central-staging");
+if (!stagingDirectory.exists()) {
+  throw new FileNotFoundException("Staging directory not created: " + stagingDirectory.getAbsolutePath());
+}
+
+String relativePath(File base, File file) {
+  return base.toURI().relativize(file.toURI()).getPath();
+}
+
+List collectFiles(File directory, List result) {
+  File[] children = directory.listFiles();
+  if (children != null) {
+    for (File child : children) {
+      result.add(child);
+      if (child.isDirectory()) {
+        collectFiles(child, result);
+      }
+    }
+  }
+  return result;
+}
+
+List everything = collectFiles(stagingDirectory, new ArrayList());
+
+// 1. The component itself must be staged.
+String gav = "org/sonatype/central/publish-pom-module-no-local-repository-files-it/1.0/" +
+    "publish-pom-module-no-local-repository-files-it-1.0";
+String[] required = { gav + ".pom", gav + ".pom.md5", gav + ".pom.sha1", gav + ".pom.sha256", gav + ".pom.sha512" };
+for (String path : required) {
+  File file = new File(stagingDirectory, path);
+  System.out.println("Checking for existence of " + file);
+  if (!file.isFile()) {
+    throw new FileNotFoundException("Missing staged file: " + file.getAbsolutePath());
+  }
+}
+
+// 2. Nothing that a local repository keeps about its content may be present.
+List unwanted = new ArrayList();
+for (Object o : everything) {
+  File file = (File) o;
+  String name = file.getName();
+  if (name.startsWith("maven-metadata") || name.startsWith("_remote.repositories") || name.equals(".locks")
+      || file.getParentFile().getName().equals(".locks") || name.endsWith(".lock")) {
+    unwanted.add(relativePath(stagingDirectory, file));
+  }
+}
+if (!unwanted.isEmpty()) {
+  throw new Exception("Staging directory holds files that must not be bundled (Central rejects the bundle): " + unwanted);
+}
+
+// 3. Every file must live in a directory that has a .pom, or be a directory on the way to one. This is the rule
+//    Central applies when it reports "Bundle has content that does NOT have a .pom file".
+for (Object o : everything) {
+  File file = (File) o;
+  if (!file.isFile()) {
+    continue;
+  }
+  File directory = file.getParentFile();
+  boolean hasPom = false;
+  File[] siblings = directory.listFiles();
+  for (File sibling : siblings) {
+    if (sibling.getName().endsWith(".pom")) {
+      hasPom = true;
+    }
+  }
+  if (!hasPom) {
+    throw new Exception("File has no .pom beside it: " + relativePath(stagingDirectory, file));
+  }
+}
+
+// 4. The bundle was built and uploaded.
+File bundle = new File(projectDirectory, "target/central-publishing/central-bundle.zip");
+System.out.println("Checking for existence of " + bundle);
+if (!bundle.isFile()) {
+  throw new FileNotFoundException("Missing bundle file: " + bundle.getAbsolutePath());
+}
+
+return true;

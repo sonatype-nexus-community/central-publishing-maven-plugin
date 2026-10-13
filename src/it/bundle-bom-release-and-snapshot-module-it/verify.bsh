@@ -16,6 +16,8 @@
 import java.io.*;
 import java.util.*;
 
+source("src/it/shared/metadata.bsh");
+
 System.out.println("Validating staging directory existence");
 File stagingDirectory = new File( "target/it/bundle-bom-release-and-snapshot-module-it/target/central-staging" );
 if (!stagingDirectory.exists()) {
@@ -63,13 +65,7 @@ String[] stagingFilePaths = {
   "org/sonatype/central/child2/1.0.0/child2-1.0.0-sources.jar.sha512",
 };
 
-for (String stagingFilePath : stagingFilePaths) {
-  File file = new File(stagingDirectory, stagingFilePath);
-  System.out.println( "Checking for existence of " + file );
-  if (!file.isFile()) {
-    throw new FileNotFoundException( "Missing staging file: " + file.getAbsolutePath() );
-  }
-}
+checkPresent(stagingDirectory, stagingFilePaths);
 
 String[] deferredFilePaths = {
   ".index",
@@ -87,13 +83,7 @@ String[] deferredFilePaths = {
   "org/sonatype/central/child1/1.0.0-SNAPSHOT/maven-metadata-central-staging.xml",
 };
 
-for (String deferredFilePath : deferredFilePaths) {
-  File file = new File(deferredDirectory, deferredFilePath);
-  System.out.println( "Checking for existence of " + file );
-  if (!file.isFile()) {
-    throw new FileNotFoundException( "Missing deferred file: " + file.getAbsolutePath() );
-  }
-}
+checkPresent(deferredDirectory, deferredFilePaths);
 
 String[] excludedStagingFilePaths = {
   "org/sonatype/central/bundle-bom-release-and-snapshot-module-it/maven-metadata-central-staging.xml",
@@ -105,13 +95,7 @@ String[] excludedStagingFilePaths = {
   "org/sonatype/central/child2/1.0.0/maven-metadata-central-staging.xml",
 };
 
-for (String stagingFilePath : excludedStagingFilePaths) {
-  File file = new File(stagingDirectory, stagingFilePath);
-  System.out.println( "Checking for existence of " + file );
-  if (file.isFile() || file.isDirectory()) {
-    throw new Exception( "Did not excluded staging file: " + file.getAbsolutePath() );
-  }
-}
+checkAbsent(stagingDirectory, excludedStagingFilePaths, true);
 
 String[] excludedDeferredFilePaths = {
   "org/sonatype/central/bundle-bom-release-and-snapshot-module-it",
@@ -119,13 +103,7 @@ String[] excludedDeferredFilePaths = {
   "org/sonatype/central/child2",
 };
 
-for (String deferredFilePath : excludedDeferredFilePaths) {
-  File file = new File(deferredDirectory, deferredFilePath);
-  System.out.println( "Checking for existence of " + file );
-  if (file.isFile() || file.isDirectory()) {
-    throw new Exception( "Did not excluded deferred file: " + file.getAbsolutePath() );
-  }
-}
+checkAbsent(deferredDirectory, excludedDeferredFilePaths, true);
 
 File bundleDirectory = new File( "target/it/bundle-bom-release-and-snapshot-module-it/target/central-publishing" );
 if (!bundleDirectory.exists()) {
