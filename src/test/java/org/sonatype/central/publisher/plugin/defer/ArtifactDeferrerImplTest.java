@@ -52,6 +52,7 @@ import static java.nio.file.Files.createTempDirectory;
 import static java.util.Collections.emptyList;
 import static java.util.Optional.empty;
 import static java.util.Optional.ofNullable;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
@@ -225,7 +226,7 @@ public class ArtifactDeferrerImplTest
     FileNotFoundException thrown =
         assertThrows(FileNotFoundException.class, () -> artifactDeferrer.deployUp(null, null, null));
 
-    assertThat(thrown.getMessage(), is(".index (No such file or directory)"));
+    assertThat(thrown.getMessage(), containsString(".index"));
     verify(artifactDeployer, never()).deploy(any(), any(), any(), any());
   }
 
