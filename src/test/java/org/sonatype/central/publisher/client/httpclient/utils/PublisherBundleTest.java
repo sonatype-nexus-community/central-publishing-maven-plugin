@@ -20,12 +20,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 import org.junit.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.sonatype.central.publisher.client.utils.PathUtils.PathOf;
@@ -115,6 +118,42 @@ public class PublisherBundleTest
       assertTrue(bundle.getPath().toString().endsWith("bundle.zip"));
       assertTrue(bundle.getPath().toFile().exists());
       assertThat(bundle.getFiles(), containsInAnyOrder(paths.toArray()));
+    }
+    finally {
+      for (Path path : paths) {
+        Files.deleteIfExists(path);
+      }
+      if (bundle != null) {
+        Files.deleteIfExists(bundle.getPath());
+      }
+    }
+  }
+
+  @Test
+  public void toZipEntryName_UsesForwardSlashes() {
+    assertEquals(
+        "com/example/demo/1.0/demo-1.0.jar",
+        PublisherBundle.BundleBuilder.toZipEntryName(PathOf("com\\example\\demo\\1.0\\demo-1.0.jar")));
+  }
+
+  @Test
+  public void createBundle_EntryNamesUseForwardSlashes() throws IOException {
+
+    String bundleDir = "/bundle-entry-names";
+    Path sourcePath = PathOf(TEMP_DIR, bundleDir);
+    List<Path> paths = createTestFilesForBundle(sourcePath);
+    PublisherBundle bundle = null;
+    try {
+      bundle = new PublisherBundle.BundleBuilder(sourcePath).addAllSourceFiles().build();
+
+      try (ZipFile zip = new ZipFile(bundle.getPath().toFile())) {
+        zip.stream()
+            .map(ZipEntry::getName)
+            .forEach(name -> assertFalse("Entry uses a backslash: " + name, name.indexOf('\\') >= 0));
+
+        assertNotNull(zip.getEntry("file.pom"));
+        assertNotNull(zip.getEntry("subdir1/file1.pom"));
+      }
     }
     finally {
       for (Path path : paths) {

@@ -143,7 +143,7 @@ public class PublisherBundle
           File bundleEntry = filePath.toFile();
 
           if (bundleEntry.isFile()) {
-            zipOutputStream.putNextEntry(new ZipEntry(fileRelativePath.toString()));
+            zipOutputStream.putNextEntry(new ZipEntry(toZipEntryName(fileRelativePath)));
             try (FileInputStream in = new FileInputStream(bundleEntry)) {
               IOUtils.copy(in, zipOutputStream);
             }
@@ -159,6 +159,14 @@ public class PublisherBundle
       }
 
       return newBundle;
+    }
+
+    /**
+     * Zip entry names always use '/' as the separator (APPNOTE 4.4.17.1), whatever platform the bundle is created
+     * on. {@code Path.toString()} uses the platform separator, which is '\' on Windows.
+     */
+    static String toZipEntryName(final Path relativePath) {
+      return relativePath.toString().replace('\\', '/');
     }
   }
 }
